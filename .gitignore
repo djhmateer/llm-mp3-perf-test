@@ -1,0 +1,5 @@
+results_*.csv
+logs/
+*.log
+__pycache__/
+.venv/
