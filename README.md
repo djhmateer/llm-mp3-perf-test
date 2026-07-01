@@ -16,8 +16,7 @@ chmod +x setup.sh && ./setup.sh
 uv run bench.py --force-batch-size 4 
 ```
 
-`setup.sh` installs `uv`, installs Ollama if missing, and pulls a small model - qwen3:8b 
----
+setup.sh installs `uv`, installs Ollama if missing, and pulls a small model - qwen3:8b 
 
 ## Running the benchmark
 
@@ -46,7 +45,6 @@ pip install ollama pydantic
 python bench.py --force-batch-size 4 --songs 100
 ```
 
-
 ## Metrics reference
 
 | Metric | Description | Target |
@@ -61,6 +59,3 @@ python bench.py --force-batch-size 4 --songs 100
 | Rated 90+ % | % of songs rated 90 or above | ~5% |
 
 See [RESULTS.md → What the Metrics Mean](RESULTS.md#what-the-metrics-mean) for a worked explanation of std dev and mean.
-
-
-
