@@ -36,13 +36,10 @@ if ! ollama list &>/dev/null; then
 fi
 
 # --- Pull models ---
-# Current leaderboard (see RESULTS.md) — winner first, then the other
-# models worth comparing against on new hardware.
+# Smoke-test model only (see RESULTS.md) — small and fast, good for
+# confirming the pipeline runs end-to-end on new hardware.
 MODELS=(
-    "qwen3.6:35b"
-    "qwen3:30b-instruct"
-    "gemma4:26b"
-    "mistral-small3.2:24b"
+    "qwen3:8b"
 )
 
 echo ""
