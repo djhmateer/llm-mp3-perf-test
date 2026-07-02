@@ -24,6 +24,21 @@ fi
 if command -v ollama &>/dev/null; then
     echo "Ollama already installed: $(ollama --version)"
 else
+    # Ollama's installer needs zstd to extract; minimal images (e.g. Runpod) often lack it.
+    if ! command -v zstd &>/dev/null; then
+        echo "Installing zstd (required by Ollama installer)..."
+        if command -v apt-get &>/dev/null; then
+            apt-get update && apt-get install -y zstd
+        elif command -v dnf &>/dev/null; then
+            dnf install -y zstd
+        elif command -v pacman &>/dev/null; then
+            pacman -Sy --noconfirm zstd
+        else
+            echo "ERROR: zstd not found and no supported package manager detected. Please install zstd manually."
+            exit 1
+        fi
+    fi
+
     echo "Installing Ollama..."
     curl -fsSL https://ollama.com/install.sh | sh
 fi
