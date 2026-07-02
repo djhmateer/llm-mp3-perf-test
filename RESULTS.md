@@ -240,3 +240,6 @@ Token math: batch size 4 → 2,633 requests for full library; ~600 input + ~120 
 | Current winner on GPU, full run | RunPod A40 | ~$0.70, ~1.5 hr |
 | Best single-GPU quality (122B) | RunPod A100 PCIe | ~$2–4 |
 | Flagship quality (235B) | RunPod H200 | ~$5–8 |
+
+
+RunPod/Vast.ai
