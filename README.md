@@ -12,7 +12,9 @@ I'm using Ubuntu24 or 26 (on WSL2 and Proxmox)
 
 ```bash
 cd llm-mp3-perf-test
-chmod +x setup.sh && ./setup.sh
+chmod +x setup.sh 
+# so that uv will run in the 
+source ./setup.sh
 uv run bench.py --force-batch-size 4 
 ```
 
@@ -21,8 +23,12 @@ setup.sh installs `uv`, installs Ollama if missing, and pulls a small model - qw
 ## Running the benchmark
 
 ```bash
+# to load uv
+source $HOME/.local/bin/env
+
 # smoke test - bad model (setup pulls this)
 ollama pull qwen3:8b # 5GB
+uv run bench.py --force-batch-size 4 --songs 4 --models qwen3:8b
 uv run bench.py --force-batch-size 4 --songs 36 --models qwen3:8b
 
 # (36 songs — good for model comparison) - this is the winner model on CPU
