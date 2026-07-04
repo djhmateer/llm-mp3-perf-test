@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Setup script for a new benchmark machine.
-# Run once before bench.py. Installs uv, pulls Ollama models.
+# Run once before bench.py. Installs uv and Ollama (no models — pull what you need).
 set -e
 
 echo "=== LLM MP3 perf test setup ==="
@@ -50,20 +50,6 @@ if ! ollama list &>/dev/null; then
     sleep 3
 fi
 
-# --- Pull models ---
-# Smoke-test model only (see RESULTS.md) — small and fast, good for
-# confirming the pipeline runs end-to-end on new hardware.
-MODELS=(
-    "qwen3:8b"
-)
-
-echo ""
-echo "Pulling models (this may take a while on first run)..."
-for model in "${MODELS[@]}"; do
-    echo "  → $model"
-    ollama pull "$model"
-done
-
 # --- Check songs_export.jsonl ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JSONL="$SCRIPT_DIR/songs_export.jsonl"
@@ -77,5 +63,6 @@ else
 fi
 
 echo ""
-echo "=== Setup complete. Run the benchmark with: ==="
+echo "=== Setup complete. Pull a model, then run the benchmark: ==="
+echo "  ollama pull qwen3:8b"
 echo "  uv run $SCRIPT_DIR/bench.py --force-batch-size 4 --machine <your-machine-name>"

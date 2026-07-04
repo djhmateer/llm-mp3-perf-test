@@ -11,11 +11,14 @@ The repo is self-contained: it ships with `songs_export.jsonl` (10,531 deduplica
 I'm using Ubuntu24 or 26 (on WSL2 and Proxmox)
 
 ```bash
+git clone https://github.com/djhmateer/llm-mp3-perf-test.git
 cd llm-mp3-perf-test
 chmod +x setup.sh 
 # so that uv will run in the 
 source ./setup.sh
-uv run bench.py --force-batch-size 4 
+ollama pull qwen3.6:35b
+uv run bench.py --force-batch-size 4 --songs 4 --models qwen3.6:35b
+# uv run bench.py --force-batch-size 4 
 ```
 
 setup.sh installs `uv`, installs Ollama if missing, and pulls a small model - qwen3:8b 
