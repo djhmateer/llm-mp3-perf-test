@@ -63,6 +63,7 @@ else
 fi
 
 echo ""
-echo "=== Setup complete. Pull a model, then run the benchmark: ==="
-echo "  ollama pull qwen3:8b"
-echo "  uv run $SCRIPT_DIR/bench.py --force-batch-size 4 --machine <your-machine-name>"
+echo "=== Setup complete. Run these commands: ==="
+echo "  source ./setup.sh"
+echo "  ollama pull qwen3.6:35b"
+echo "  uv run bench.py --force-batch-size 4 --songs 4 --models qwen3.6:35b"

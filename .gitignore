@@ -1,5 +1,6 @@
-results_*.csv
-logs/
+*.csv
 *.log
+logs/
+downloaded/
 __pycache__/
 .venv/

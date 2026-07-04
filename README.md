@@ -13,7 +13,6 @@ I'm using Ubuntu24 or 26 (on WSL2 and Proxmox)
 ```bash
 git clone https://github.com/djhmateer/llm-mp3-perf-test.git
 cd llm-mp3-perf-test
-chmod +x setup.sh 
 # so that uv will run in the 
 source ./setup.sh
 ollama pull qwen3.6:35b

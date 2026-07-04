@@ -56,6 +56,27 @@ Best model tested on every quality metric. Runs on CPU DDR5 (64GB RAM).
 
 ---
 
+## GPU: qwen3.6:35b on RunPod (RTX A5000, 24GB)
+
+Same model and weights as the CPU winner above, run on a RunPod RTX A5000 pod (100-song run, batch size 4) to see how much a 24GB GPU speeds things up.
+
+| Metric | GPU (RTX A5000) | CPU (DDR5, winner above) | Target |
+|--------|-----------------|--------------------------|--------|
+| TPS | **45.2** | 7.9 | — |
+| s/song | **0.60s** | 3.48s | — |
+| Std dev | 12.6 | 11.8 | >10 |
+| Null rate | 11% | **8%** | <20% |
+| 90+% | 5.6% | 5% | ~5% |
+| Mean | 70.8 | 71.7 | ~65 |
+| Valid ratings | 100% | 100% | 100% |
+| Full library est. | **~1.75h** | ~10.1h | — |
+
+**~5.7x faster** than CPU, with quality metrics essentially unchanged (same model — this is a sanity check that GPU inference doesn't degrade output, not a different comparison point). Null rate ticked up slightly (11% vs 8%) but this is likely sample variance from the smaller 100-song run rather than a GPU effect, and it's still well under the 20% threshold.
+
+At $0.27/hr, the RTX A5000 turns qwen3.6:35b from "best quality but slow" into fast enough to just always use — full library (10,531 songs) in under 2 hours for a few cents.
+
+---
+
 ## Comparison (200-song runs, DDR5)
 
 | Model | TPS | s/song | Std dev | Null% | 90+% | Mean | Full library est. | Status |
