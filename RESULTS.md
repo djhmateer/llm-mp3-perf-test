@@ -58,22 +58,42 @@ Best model tested on every quality metric. Runs on CPU DDR5 (64GB RAM).
 
 ## GPU: qwen3.6:35b on RunPod (RTX A5000, 24GB)
 
-Same model and weights as the CPU winner above, run on a RunPod RTX A5000 pod (100-song run, batch size 4) to see how much a 24GB GPU speeds things up.
+Same model and weights as the CPU winner above, run on a RunPod RTX A5000 pod (200-song run, batch size 4) to see how much a 24GB GPU speeds things up.
 
 | Metric | GPU (RTX A5000) | CPU (DDR5, winner above) | Target |
 |--------|-----------------|--------------------------|--------|
-| TPS | **45.2** | 7.9 | — |
+| TPS | **45.5** | 7.9 | — |
 | s/song | **0.60s** | 3.48s | — |
-| Std dev | 12.6 | 11.8 | >10 |
-| Null rate | 11% | **8%** | <20% |
-| 90+% | 5.6% | 5% | ~5% |
-| Mean | 70.8 | 71.7 | ~65 |
+| Std dev | 12.4 | 11.8 | >10 |
+| Null rate | **7%** | 8% | <20% |
+| 90+% | 4.8% | 5% | ~5% |
+| Mean | 71.2 | 71.7 | ~65 |
 | Valid ratings | 100% | 100% | 100% |
-| Full library est. | **~1.75h** | ~10.1h | — |
+| Full library est. | **~1.76h** | ~10.1h | — |
 
-**~5.7x faster** than CPU, with quality metrics essentially unchanged (same model — this is a sanity check that GPU inference doesn't degrade output, not a different comparison point). Null rate ticked up slightly (11% vs 8%) but this is likely sample variance from the smaller 100-song run rather than a GPU effect, and it's still well under the 20% threshold.
+**~5.7x faster** than CPU, with quality metrics essentially unchanged (same model — this is a sanity check that GPU inference doesn't degrade output, not a different comparison point). Null rate actually came in slightly better than CPU (7% vs 8%) — within normal run-to-run variance.
 
 At $0.27/hr, the RTX A5000 turns qwen3.6:35b from "best quality but slow" into fast enough to just always use — full library (10,531 songs) in under 2 hours for a few cents.
+
+---
+
+## Tested and eliminated: qwen3.5:122b-a10b (A100 PCIe, 80GB)
+
+Hypothesis going in: 122B total / 10B active params (vs qwen3.6:35b's 35B/3B) should mean meaningfully more embedded music knowledge. **Result: it's worse on every quality metric that matters, and much slower/costlier.** 200-song run, batch size 4.
+
+| Metric | qwen3.5:122b-a10b (A100) | qwen3.6:35b (A5000, winner) | Target |
+|--------|--------------------------|------------------------------|--------|
+| TPS | 11.1 | 45.5 | — |
+| s/song | 2.45s | 0.60s | — |
+| Null rate | 20% | **7%** | <20% |
+| Mean | 74.1 | 71.2 | ~65 |
+| Std dev | 11.4 | 12.4 | >10 |
+| 90+% | 8% | 4.8% | ~5% |
+| Valid ratings | 100% | 100% | 100% |
+| Full library est. | ~7.2h | ~1.76h | — |
+| Full library cost | ~$10 (A100 @ $1.39/hr) | ~$0.47 (A5000 @ $0.27/hr) | — |
+
+More active parameters didn't translate to better music knowledge here — null rate is *worse* (20% vs 7%, right at the edge of the acceptable threshold) and the mean drifts further from the target. Speed is ~4x slower (compute-bound on the larger active-parameter count, not a GPU/offload problem — confirmed all 49/50 layers resident on the A100), and a full-library run would cost ~20x more than the current winner. **Bigger is not automatically better for this task** — likely because whatever training-data/RLHF choices shape music recall don't scale simply with active params. Sticking with `qwen3.6:35b` as the winner.
 
 ---
 
@@ -213,54 +233,55 @@ DDR5 vs DDR4: approximately 2x TPS on same model (CPU inference is memory-bandwi
 
 ## Next Steps: GPU Testing
 
-DDR5 CPU testing is complete — all viable CPU models have been benchmarked. The next step is GPU rental to test models that don't fit in 64GB of CPU RAM, starting with `qwen3.5:122b-a10b` — the first model with significantly more total knowledge than anything tested so far.
+DDR5 CPU testing is complete. GPU testing has confirmed `qwen3.6:35b` as a fast, cheap winner (A5000) and eliminated `qwen3.5:122b-a10b` (A100) — bigger active-parameter count did not translate to better music knowledge, just 4x the runtime and ~20x the cost. That result is worth keeping in mind for what to try next: prioritize models likely to have *better training data for music*, not just more parameters.
 
-Token math: batch size 4 → 2,633 requests for full library; ~600 input + ~120 output tokens per request = ~1.58M input, ~0.32M output tokens total. On an A100 80GB, expect 50–150 TPS — a 200-song benchmark would take under 2 minutes per model.
+Also confirmed since the original research: `qwen3.5:397b` (the true Qwen 3.5 flagship) is **cloud-only** via Ollama (`qwen3.5:397b-cloud`) — it can't be pulled and self-hosted on a rented GPU, so it's off the table regardless of budget.
+
+Token math: batch size 4 → 2,633 requests for full library; ~600 input + ~120 output tokens per request = ~1.58M input, ~0.32M output tokens total.
 
 ### Priority models to test
 
 | Model | Size (Q4) | Why |
 |-------|-----------|-----|
-| `qwen3.5:122b-a10b` | ~70GB | **Best bet.** Newer Qwen generation; 122B total params (10B active) — far more embedded knowledge than anything tested; just fits an 80GB GPU at Q4 |
-| `qwen2.5:72b` | ~45GB | Was 0.8 TPS on CPU; quality ceiling for the Qwen 2.5 family; safe fallback if 3.5 unavailable |
-| `qwen3:32b` | ~20GB | Dense Qwen3 32B — Alibaba states it matches qwen2.5:72b on benchmarks; comfortable fit, could run Q8 |
-| `qwen3.6:35b-a3b-q8_0` | ~35GB | Current CPU winner at higher precision; on GPU, memory bandwidth isn't the bottleneck so Q8 may outperform Q4 |
-| `qwen3.6:35b` | ~22GB | Confirm CPU winner's speed on GPU as a baseline |
-| `qwen3:235b-a22b` | ~142GB Q4 — needs 2×A100/H100 | Qwen3 flagship MoE (235B total, 22B active) — likely highest open-source music knowledge available |
-| `qwen3.5:397b-a17b` | ~230GB+ — needs 3-4×A100 | Qwen3.5 flagship |
+| `qwen2.5:72b` | ~45GB | **Best bet next.** Ran on CPU (0.8 TPS) but was never quality-tested — too slow for a real sample. Now cheap to test properly on GPU (fits A40 $0.44/hr or A100). Different generation/training data than qwen3.6, so may recall music qwen3.6 doesn't |
+| `qwen3:32b` | ~20GB | Dense Qwen3 32B — Alibaba states it matches qwen2.5:72b on benchmarks; comfortable fit on any GPU tested so far, could run Q8 for extra precision at this size |
+| `qwen3.6:35b-a3b-q8_0` | ~35GB | Current winner at higher precision; on GPU, memory bandwidth isn't the bottleneck so Q8 may outperform Q4 (was 14% slower with no quality gain on CPU — GPU could flip this) |
+| `qwen3:235b-a22b` | ~142GB Q4 — needs 2×A100/H100 | Qwen3 flagship MoE (235B total, 22B active) — largest self-hostable option, but given the 122B-a10b result, treat as a long-shot rather than an assumed win |
 
 ### Likely not worth trying
 
 | Model | Why to skip |
 |-------|------------|
+| `qwen3.5:122b-a10b` | **Tested and eliminated** — 20% null rate (vs 7% for winner), 4x slower, ~20x costlier full-library run; see comparison above |
+| `qwen3.5:397b` | Cloud-only (`-cloud` tag) — not self-hostable on a rented GPU |
 | `qwen3:72b` | Does not exist — Qwen3 dense tops out at 32B |
 | `gemma4:27b` | 23% null on gemma4:26b already tested; benchmark-confirmed music-domain weaknesses — size won't fix training data gaps |
 | Any Llama 3.x | 38% null rate on llama3.3:70b; Meta models lack music knowledge regardless of size |
 | DeepSeek-R1 any size | `think=False` not respected in ollama — TTFT stays 190s+ |
 | Phi-4 any size | Std dev 6.4 — compressed rating range is fundamental to its training, not a size issue |
 | Mistral small/medium | 34% null rate — Mistral training data gaps in music knowledge |
-| Groq (any model) | Only carries qwen3:32b and qwen3.6:27b, both already eliminated on CPU for quality (quality is model-intrinsic, not hardware) — doesn't carry qwen3.5:122b or qwen3:235b either |
+| Groq (any model) | Only carries qwen3:32b and qwen3.6:27b, both already eliminated on CPU for quality (quality is model-intrinsic, not hardware) — doesn't carry qwen2.5:72b or qwen3:235b either |
 
 ### Cloud GPU costs (RunPod, full library run)
 
 | GPU | VRAM | $/hr | Models that fit | Full library cost (incl. setup) |
 |-----|------|------|-----------------|---------------------------------|
-| A40 | 48GB | $0.44 | qwen3.6:35b, qwen3:32b | **~$0.70** (~1.5 hrs total) |
-| RTX 6000 Ada | 48GB | $0.77 | same | ~$0.85 |
-| A100 PCIe | 80GB | $1.39 | + qwen2.5:72b, qwen3.5:122b-a10b | **~$2–4** (more benchmarking time) |
+| RTX A5000 | 24GB | $0.27 | qwen3.6:35b (**winner, confirmed**) | **~$0.47** (~1.75 hrs total) |
+| A40 | 48GB | $0.44 | + qwen2.5:72b, qwen3:32b | ~$0.70–1 |
+| RTX 6000 Ada | 48GB | $0.77 | same | ~$0.85–1.20 |
+| A100 PCIe | 80GB | $1.39 | + qwen3:235b-a22b (needs 2x) | ~$10 (confirmed for eliminated qwen3.5:122b-a10b) |
 | H200 | 141GB | $4.39 | + qwen3:235b-a22b | **~$5–8** |
 
 **Vast.ai** often runs 20–40% cheaper than RunPod for the same GPU (A100 from ~$1.10/hr) — good for non-urgent batch jobs.
 
 ### Recommendation
 
-**Start with RunPod A100 + `qwen3.5:122b-a10b`** — the first genuinely untested model with meaningfully more total knowledge than the CPU winner.
+**Next: RunPod A40 + `qwen2.5:72b`** — a different model generation/training set than qwen3.6, never quality-tested (too slow on CPU to get a real sample), and cheap to test now that GPU speed makes 200-song runs take minutes. Given the qwen3.5:122b-a10b result, don't assume it'll beat the winner — but it's the cheapest remaining unknown.
 
 | Goal | Option | Cost |
 |------|--------|------|
-| Current winner on GPU, full run | RunPod A40 | ~$0.70, ~1.5 hr |
-| Best single-GPU quality (122B) | RunPod A100 PCIe | ~$2–4 |
-| Flagship quality (235B) | RunPod H200 | ~$5–8 |
-
+| Current winner, full run | RunPod A5000 | ~$0.47, ~1.75 hr |
+| Next test: qwen2.5:72b | RunPod A40 | ~$0.10–0.20 for a 200-song sample |
+| Long-shot flagship quality (235B) | RunPod H200 (2x) | ~$5–8 |
 
 RunPod/Vast.ai

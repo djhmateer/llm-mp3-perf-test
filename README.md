@@ -16,7 +16,9 @@ cd llm-mp3-perf-test
 # so that uv will run in the 
 source ./setup.sh
 ollama pull qwen3.6:35b
+ollama pull qwen3.5:122b-a10b # needs an A100
 uv run bench.py --force-batch-size 4 --songs 4 --models qwen3.6:35b
+uv run bench.py --force-batch-size 4 --songs 4 --models qwen3.5:122b-a10b
 # uv run bench.py --force-batch-size 4 
 ```
 
