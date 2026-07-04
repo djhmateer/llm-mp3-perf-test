@@ -3,8 +3,10 @@
 #
 # Runpod's ssh.runpod.io proxy only supports interactive PTY sessions, not
 # the exec/subsystem channels scp/sftp need — so this uses the pod's direct
-# TCP SSH connection instead (shown on the pod's Connect panel), e.g.:
+# TCP SSH connection instead (shown on the pod's Connect panel). Accepts
+# either form:
 #   root@69.30.85.236 -p 22134
+#   ssh root@69.30.85.236 -p 22134 -i ~/.ssh/id_ed25519
 #
 # Uses legacy scp protocol (-O) because Runpod's minimal container images
 # don't have the sftp-server subsystem enabled, and modern OpenSSH scp
@@ -12,9 +14,9 @@
 set -u
 
 KEY="$HOME/.ssh/id_ed25519"
-REMOTE_DIR="/llm-mp3-perf-test"
+REMOTE_DIR_CANDIDATES=("/llm-mp3-perf-test" "/root/llm-mp3-perf-test")
 
-read -rp "Runpod direct SSH connection (e.g. root@69.30.85.236 -p 22134): " CONN
+read -rp "Runpod direct SSH connection (e.g. ssh root@69.30.85.236 -p 22134 -i ~/.ssh/id_ed25519): " CONN
 
 if [ -z "$CONN" ]; then
     echo "ERROR: no connection string given."
@@ -23,13 +25,28 @@ fi
 
 # shellcheck disable=SC2206
 CONN_PARTS=($CONN)
-MACHINE="${CONN_PARTS[0]}"
+
+MACHINE=""
 PORT=22
-for ((i = 1; i < ${#CONN_PARTS[@]}; i++)); do
-    if [ "${CONN_PARTS[$i]}" = "-p" ]; then
-        PORT="${CONN_PARTS[$((i + 1))]}"
-    fi
+for ((i = 0; i < ${#CONN_PARTS[@]}; i++)); do
+    part="${CONN_PARTS[$i]}"
+    case "$part" in
+        ssh) ;;
+        -p) PORT="${CONN_PARTS[$((i + 1))]}" ;;
+        -i) KEY="${CONN_PARTS[$((i + 1))]/#\~/$HOME}" ;;
+        -*) ;;
+        *)
+            if [ -z "$MACHINE" ] && [ "${CONN_PARTS[$((i - 1))]}" != "-p" ] && [ "${CONN_PARTS[$((i - 1))]}" != "-i" ]; then
+                MACHINE="$part"
+            fi
+            ;;
+    esac
 done
+
+if [ -z "$MACHINE" ]; then
+    echo "ERROR: could not find a user@host in the connection string."
+    exit 1
+fi
 
 HOST="${MACHINE#*@}"
 LOCAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/downloaded/${HOST}_${PORT}"
@@ -37,6 +54,20 @@ LOCAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/downloaded/${HOST}_${PO
 mkdir -p "$LOCAL_DIR/logs"
 
 SCP_OPTS=(-O -P "$PORT" -i "$KEY" -o StrictHostKeyChecking=accept-new)
+SSH_OPTS=(-p "$PORT" -i "$KEY" -o StrictHostKeyChecking=accept-new)
+
+REMOTE_DIR=""
+for candidate in "${REMOTE_DIR_CANDIDATES[@]}"; do
+    if ssh "${SSH_OPTS[@]}" "$MACHINE" "[ -d '$candidate' ]" 2>/dev/null; then
+        REMOTE_DIR="$candidate"
+        break
+    fi
+done
+
+if [ -z "$REMOTE_DIR" ]; then
+    echo "ERROR: couldn't find the repo at any of: ${REMOTE_DIR_CANDIDATES[*]}"
+    exit 1
+fi
 
 echo "Downloading from $MACHINE:$PORT:$REMOTE_DIR to $LOCAL_DIR ..."
 

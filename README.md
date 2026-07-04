@@ -38,7 +38,7 @@ ollama pull qwen3.6:35b
 uv run bench.py --force-batch-size 4 --songs 36 --models qwen3.6:35b
 
 # runner up on CPU - good for speed
-ollama pull qwen3:30b-instruct
+ollama pull qwen"3:se 30b-instruct
 uv run bench.py --force-batch-size 4 --songs 36 --models qwen3:30b-instruct
 ```
 

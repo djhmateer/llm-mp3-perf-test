@@ -46,7 +46,8 @@ fi
 # Ensure Ollama is running
 if ! ollama list &>/dev/null; then
     echo "Starting Ollama..."
-    ollama serve &
+    ollama serve >/tmp/ollama-serve.log 2>&1 &
+    disown
     sleep 3
 fi
 
