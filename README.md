@@ -17,9 +17,14 @@ cd llm-mp3-perf-test
 source ./setup.sh
 ollama pull qwen3.6:35b
 ollama pull qwen3.5:122b-a10b # needs an A100
+ollama pull qwen3:235b-a22b # needs a B200 - 180GB vRAM 
+ollama pull qwen2.5:72b
 uv run bench.py --force-batch-size 4 --songs 4 --models qwen3.6:35b
+uv run bench.py --force-batch-size 4 --songs 15000 --models qwen3.6:35b
+
 uv run bench.py --force-batch-size 4 --songs 4 --models qwen3.5:122b-a10b
-# uv run bench.py --force-batch-size 4 
+uv run bench.py --force-batch-size 4 --songs 4 --models qwen3:235b-a22b
+uv run bench.py --force-batch-size 4 --songs 4 --models qwen2.5:72b
 ```
 
 setup.sh installs `uv`, installs Ollama if missing, and pulls a small model - qwen3:8b 

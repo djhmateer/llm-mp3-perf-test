@@ -33,7 +33,7 @@ import termios
 import threading
 import time
 import tty
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import ollama
@@ -364,6 +364,8 @@ def benchmark_model(
     rows: list[dict] = []
     offset = 0
     cold_start = True
+    warm_elapsed_s = 0.0
+    warm_songs = 0
 
     while offset < len(songs):
         batch = songs[offset:offset + batch_size]
@@ -428,7 +430,19 @@ def benchmark_model(
         if cold_start:
             status += "  [cold start]"
         tps_str = f"{tps:.1f}" if tps else "?"
-        plog(f"    {batch_label:<12}  {status}  {time_per_song:.2f}s/song  tps={tps_str}", log)
+
+        if not cold_start:
+            warm_elapsed_s += total_s
+            warm_songs += len(batch)
+
+        eta_str = ""
+        remaining = len(songs) - offset
+        if warm_songs and remaining > 0:
+            avg_s_per_song = warm_elapsed_s / warm_songs
+            eta = datetime.now() + timedelta(seconds=avg_s_per_song * remaining)
+            eta_str = f"  eta={eta.strftime('%H:%M:%S')}"
+
+        plog(f"    {batch_label:<12}  {status}  {time_per_song:.2f}s/song  tps={tps_str}{eta_str}", log)
         cold_start = False
 
     return _summarise(model, batch_size, rows, log), rows
