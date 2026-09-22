@@ -221,7 +221,7 @@ Quality is identical within noise (as expected — same model, same weights), co
 
 **Dense models** activate all their parameters on every token. A 35B dense model uses all 35B parameters per token generated. This gives consistently high quality but is slower and uses more memory.
 
-**MoE (Mixture of Experts) models** have a large total parameter count but only activate a small fraction per token — routing each token to a few specialist "expert" sub-networks. For example, qwen3:30b-instruct has 30B total parameters but only ~3B active per token. This makes it much faster than a 30B dense model (12.9 TPS vs 7.9 TPS for qwen3.6:35b) but the smaller active parameter count can mean shallower knowledge. In practice qwen3:30b-instruct's MoE architecture explains why it's faster than qwen3.6:35b despite similar overall size, but has a higher null rate (11% vs 8%).
+**MoE (Mixture of Experts) models** have a large total parameter count but only activate a small fraction per token — routing each token to a few specialist "expert" sub-networks. Both `qwen3:30b-instruct` and `qwen3.6:35b` are MoE (~3B active per token each), yet `qwen3.6:35b` is slower on CPU (7.9 TPS vs 12.9 TPS) — architecture details beyond active-parameter count (expert routing overhead, layer structure) clearly matter too, not just the raw active-param number. `qwen3.6:35b`'s smaller/different expert set also gives it meaningfully better quality (8% vs 11% null, 11.8 vs 9.5 std dev).
 
 ### Model families
 
@@ -280,8 +280,8 @@ Note: despite the target distribution in the prompt, all models tested skew thei
 | Machine | RAM | Memory | Notes |
 |---------|-----|--------|-------|
 | DESKTOP-3GDSG0D (WSL2) | ~32GB | DDR4 | Dave's dev machine |
-| bayanat301 (Proxmox) | 64GB | DDR5 | ~2x WSL2 TPS on same model |
-| phil-gpu | TBD | GPU | Not yet tested |
+| bayanat301 (Proxmox) | 64GB | DDR5 | ~2x WSL2 TPS on same model; ran two independent full 10,531-song library runs (see "Full-library CPU runs" above) |
+| RunPod pods (various) | — | GPU | RTX A5000, A100 PCIe, B200 all tested — see the GPU sections above |
 
 DDR5 vs DDR4: approximately 2x TPS on same model (CPU inference is memory-bandwidth-bound).
 
@@ -293,7 +293,7 @@ DDR5 vs DDR4: approximately 2x TPS on same model (CPU inference is memory-bandwi
 
 **Null rate is training data, not hardware.** Models with high null rates (llama3.3, mistral, phi4) don't improve with faster hardware — they simply don't know the songs.
 
-**MoE vs Dense:** qwen3:30b-instruct is MoE (~3B active params per token), giving 12.9 TPS on CPU. qwen3.6:35b is likely dense (~35B active), giving 7.9 TPS — but with significantly better quality (8% vs 11% null, 11.8 vs 9.5 std dev).
+**MoE vs Dense:** qwen3:30b-instruct and qwen3.6:35b are both MoE (~3B active params per token each). qwen3:30b-instruct is faster on CPU (12.9 TPS vs 7.9 TPS) but qwen3.6:35b has significantly better quality (8% vs 11% null, 11.8 vs 9.5 std dev) — active-parameter count alone doesn't predict speed or quality here.
 
 **Thinking models need `think=False`:** qwen3 and gemma4 family respect this via ollama. deepseek-r1 does not — TTFT stays at 190s regardless.
 
@@ -356,3 +356,50 @@ Token math: batch size 4 → 2,633 requests for full library; ~600 input + ~120 
 | Next test: qwen2.5:72b | RunPod A40 | ~$0.10–0.20 for a 200-song sample |
 
 RunPod/Vast.ai
+
+---
+
+## Overall Summary
+
+Started with a simple question: which local LLM is best at rating 10,531 songs in a personal music library (1–100, structured output), and what's the cheapest/fastest way to run it?
+
+**The winner is `qwen3.6:35b`** (Alibaba's Qwen 3.6, MoE architecture — 35B total params, only 3B active per token). It topped every quality metric tested against a field that included Qwen 2.5/3/3.6, Gemma 4, Mistral, Llama 3.3, Phi-4, DeepSeek-R1, and Command R: **8% null rate** (knows 92% of the library), **std dev 11.8** (uses the full rating scale rather than clustering everything around the mean), and a **mean of 71.7** — closest of any non-reasoning model to the calibration target of 65.
+
+**It runs fine on CPU** — 64GB DDR5 RAM, no GPU required, ~7.9 TPS, ~3.5s/song, ~10 hours for the full library. Two independent full 10,531-song CPU runs confirmed the aggregate numbers are rock solid and reproducible — though individual song ratings carry roughly ±6 points of run-to-run noise even at temperature 0.1 with a fixed seed, likely from Ollama's batched inference internals. Don't treat any single rating as precise; the distribution is what's trustworthy.
+
+**GPU makes it dramatically cheaper and faster, not better.** The same model on a $0.27/hr RunPod RTX A5000 (24GB) hit 45.5 TPS — processing the entire library in **under 2 hours for under 50 cents**. Quality was identical to the CPU run, as expected (same weights). A B200 pushed that further to 125 TPS (~38 minutes) at higher hourly cost, useful only if wall-clock time matters more than the extra few dollars.
+
+**Bigger models were not better — twice.** Tested two much larger flagship models expecting more parameters to mean more music knowledge: `qwen3.5:122b-a10b` (122B total/10B active, on an A100) actually had a *worse* null rate than the 35B winner (20% vs 8%) while running 4x slower and ~20x costlier. `qwen3:235b-a22b` (235B total/22B active, on a B200) looked catastrophic at first (78% "null" rate) — but closer inspection showed most of that was actually a formatting bug: the model confidently recognized well-known songs (`confidence: high`) but simply omitted the required `rating` field for 20 of 32 test songs. True recall was fine, but the model's unreliable adherence to the output schema disqualified it anyway. Lesson: for a task like this, training-data breadth for a specific domain (music trivia) and reliable instruction-following matter far more than raw parameter count.
+
+**Cost/speed bottom line for anyone replicating this:** run `qwen3.6:35b` on a RunPod RTX A5000 (or A40/L4/RTX 4090 if A5000 availability is tight — any 24GB+ card fits comfortably). Full 10,531-song library, done in under two hours, for less than the price of a coffee.
+
+---
+
+## All Models Tested — Master Table
+
+Every model tested, winner at top. TPS/quality numbers are from the largest reliable sample available for that model (200-song where possible; smaller samples noted). Same model tested on multiple hardware appears as separate rows.
+
+| Model | Hardware | Sample | TPS | s/song | Null% | Mean | Std Dev | 90+% | Status |
+|-------|----------|--------|-----|--------|-------|------|---------|------|--------|
+| **qwen3.6:35b** | CPU DDR5 | 200 | 7.9 | 3.48s | **8%** | 71.7 | **11.8** | 5% | **Winner** |
+| **qwen3.6:35b** | GPU RTX A5000 | 200 | 45.5 | 0.60s | 7% | 71.2 | 12.4 | 4.8% | **Winner — GPU confirmed** |
+| **qwen3.6:35b** | CPU DDR5 (full library) | 10,531 | 7.4 / 7.2 | 3.70–3.81s | 4.1% | 71.3 | 12.1 | 3.5–3.6% | **Winner — full-scale confirmed (×2 runs)** |
+| **qwen3.6:35b** | GPU B200 | 200 | 125.3 | 0.22s | 8% | 71.0 | 11.6 | 3.8% | **Winner — fastest GPU tested** |
+| qwen3:30b-instruct | CPU DDR5 | 200 | 12.9 | 2.22s | 11% | 78.4 | 9.5 | 8% | Runner-up (speed) |
+| gemma4:26b | CPU DDR5 | 200 | 6.9 | 4.03s | 23% | 76.5 | 10.2 | 10% | Runner-up (quality), null above target |
+| mistral-small3.2:24b | CPU DDR5 | 200 | 2.6 | 10.12s | 34% | 72.2 | 12.0 | 6% | Eliminated — too many nulls |
+| deepseek-r1:32b | CPU DDR5 | 200 | 2.0 | 59.77s | 25% | 66.6 | 9.8 | 0% | Eliminated — `think=False` ignored, 190s TTFT |
+| phi4:14b | CPU DDR5 | 200 | 3.9 | 5.63s | 34% | 74.8 | 6.4 | 5% | Eliminated — worst rating spread |
+| qwen3.5:122b-a10b | GPU A100 PCIe | 200 | 11.1 | 2.45s | 20% | 74.1 | 11.4 | 8% | Eliminated — worse recall than winner, 4x slower, ~20x costlier |
+| command-r:35b | CPU DDR5 | 32 | 2.0 | 12.16s | 44% | — | — | — | Eliminated — major music-knowledge gaps |
+| qwen3:235b-a22b | GPU B200 | 32 (smoke test) | 12.3 | 1.52s | 78% reported (~16% true) | 80.1 | 6.4 | 0% | Eliminated — format-adherence bug (omits `rating` field) |
+| qwen2.5:32b | CPU DDR5 | — | 2.1 | — | 36% | — | 8.1 | — | Eliminated — superseded |
+| llama3.3:70b | CPU DDR5 | — | — | — | 38% | — | — | — | Eliminated — poor music knowledge (Meta) |
+| qwen3.6:35b-a3b-q8_0 | CPU DDR5 | 32 | 6.6 | 4.20s | — | — | — | — | Eliminated — 14% slower than Q4, no quality gain |
+| qwen2.5:72b | GPU A40 | 32 | 1.1 | 23.4s | 15.6% | 74.3 | 9.2 | 0% | **Inconclusive** — likely CPU fallback (47GB dense model barely fits 48GB card); retest on A100 pending |
+| qwen2.5:72b | CPU DDR5 | — | 0.8 | — | — | — | — | — | Untested for quality — too slow for a real sample |
+| qwen3.6:27b-q8_0 | CPU DDR5 | 32 | 1.0 | 27.49s | — | — | — | — | Eliminated — Q8 hits memory bandwidth wall at this size |
+| qwen3:8b | CPU DDR4 (WSL2) | — | — | — | 28% | — | 7.5 | — | Eliminated — too small |
+| qwen3:14b | CPU DDR4 (WSL2) | — | — | 9.7s | 31% | — | 10.3 | — | Eliminated — slow, high null |
+| qwen3:32b | CPU DDR4 (WSL2) | — | 1.1 | — | — | — | — | — | Eliminated — same speed as qwen2.5:32b, worse quality |
+| qwen2.5:72b | CPU DDR4 (WSL2, 32GB) | — | — | — | — | — | — | — | Eliminated — OOM (~45GB model, ~32GB RAM) |
